@@ -5,7 +5,7 @@ import sqlite3
 
 from pathlib import Path
 from contextlib import closing
-
+from provenance import get_provenance, build_filing_url
 
 # ===== App Configuration =====
 
@@ -367,3 +367,81 @@ else:
             file_name="company_comparison.csv",
             mime="text/csv"
         )
+
+
+# ===== Lesson 12: SEC Data Provenance =====
+
+st.divider()
+st.header("SEC Data Provenance")
+
+st.write(
+    "Trace financial metrics to their "
+    "original SEC filings."
+)
+
+try:
+    source_records = get_provenance(selected_cik)
+
+except sqlite3.OperationalError:
+    source_records = []
+
+if not source_records:
+    st.info(
+        "No source records found. "
+        "Run main.py for this company first."
+    )
+
+else:
+    source_df = pd.DataFrame(source_records)
+
+    # Construct filing URLs
+    source_df["SEC Filing"] = source_df[
+        "accession"
+    ].apply(
+        lambda accession: build_filing_url(
+            selected_cik,
+            accession
+        )
+    )
+
+    # Display financial values in billions
+    source_df["Value ($B)"] = (
+        source_df["reported_value"] / 1e9
+    )
+
+    source_df = source_df.rename(columns={
+        "period_end": "Period End",
+        "metric": "Metric",
+        "period_start": "Period Start",
+        "xbrl_tag": "XBRL Tag",
+        "accession": "Accession Number",
+        "filed_date": "Filing Date"
+    })
+
+    columns = [
+        "Period End",
+        "Metric",
+        "Value ($B)",
+        "XBRL Tag",
+        "Filing Date",
+        "Accession Number",
+        "SEC Filing"
+    ]
+
+    st.dataframe(
+        source_df[columns].round(2),
+        column_config={
+            "SEC Filing": st.column_config.LinkColumn(
+                "Original SEC Filing",
+                display_text="Open Filing"
+            )
+        },
+        hide_index=True,
+        width="stretch"
+    )
+
+    st.caption(
+        "Sources are SEC XBRL facts. "
+        "Filing dates and financial periods "
+        "may differ because of later filings."
+    )

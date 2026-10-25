@@ -7,7 +7,7 @@ from analytics import analyze_company
 from database import save_to_database
 from exporter import export_csv
 from validator import validate_financial_data
-
+from provenance import save_provenance
 
 def main():
     print("===== Welcome to FinScope =====")
@@ -67,6 +67,7 @@ def main():
 
     # Step 5: Save data
     save_to_database(cik, company, results)
+    save_provenance(cik, results)
 
     # Step 6: Export CSV
     export_csv(ticker, results)
