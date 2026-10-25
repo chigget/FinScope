@@ -105,7 +105,7 @@ if df.empty:
     st.stop()
 
 
-# ===== Financial Metrics =====
+# Financial Metrics 
 
 latest = df.iloc[-1]
 
@@ -144,7 +144,7 @@ with col3:
     )
 
 
-# ===== Historical Charts =====
+# Historical Charts 
 
 st.subheader("Historical Financial Performance")
 
@@ -158,7 +158,7 @@ st.line_chart(
 )
 
 
-# ===== Revenue Growth Chart =====
+#  Revenue Growth Chart
 
 st.subheader("Revenue Growth (%)")
 
@@ -210,3 +210,160 @@ st.download_button(
     file_name=f"finscope_{selected_cik}.csv",
     mime="text/csv"
 )
+
+
+# ===== Multi-Company Comparison =====
+
+st.divider()
+st.header("Multi-Company Comparison")
+
+# Select two or three companies
+selected_companies = st.multiselect(
+    "Select companies to compare",
+    options=list(company_options.keys()),
+    default=list(company_options.keys())[:2],
+    max_selections=3
+)
+
+if len(selected_companies) < 2:
+    st.info("Please select at least two companies.")
+
+else:
+    comparison_frames = []
+    year_sets = []
+
+    # Load data for every selected company
+    for company_label in selected_companies:
+
+        cik = company_options[company_label]
+        company_df = get_financial_data(cik)
+
+        if company_df.empty:
+            st.warning(f"No data for {company_label}")
+            continue
+
+        company_df = company_df.copy()
+
+        # Extract company name
+        company_df["Company"] = company_label.rsplit(
+            " (", 1
+        )[0]
+
+        # Year in which the reporting period ends
+        company_df["Year"] = pd.to_datetime(
+            company_df["period_end"]
+        ).dt.year
+
+        company_df["Revenue ($B)"] = (
+            company_df["revenue"] / 1e9
+        )
+
+        company_df["Net Income ($B)"] = (
+            company_df["net_income"] / 1e9
+        )
+
+        company_df["Net Profit Margin (%)"] = (
+            company_df["profit_margin"]
+        )
+
+        company_df["Revenue Growth (%)"] = (
+            company_df["revenue_growth"]
+        )
+
+        comparison_frames.append(
+            company_df[
+                [
+                    "Company",
+                    "Year",
+                    "period_end",
+                    "Revenue ($B)",
+                    "Net Income ($B)",
+                    "Net Profit Margin (%)",
+                    "Revenue Growth (%)"
+                ]
+            ]
+        )
+
+        year_sets.append(set(company_df["Year"]))
+
+    if len(comparison_frames) < 2:
+        st.warning("Not enough company data.")
+
+    else:
+        # Combine company data
+        comparison_df = pd.concat(
+            comparison_frames,
+            ignore_index=True
+        )
+
+        st.caption(
+            "All amounts are in USD. Companies may "
+            "have different fiscal year-end dates. "
+            "Year refers to the period-end calendar year."
+        )
+
+        # ===== Latest Common Year =====
+
+        common_years = set.intersection(*year_sets)
+
+        if common_years:
+            latest_year = max(common_years)
+
+            st.subheader(
+                f"Financial Comparison — {latest_year}"
+            )
+
+            latest_df = comparison_df[
+                comparison_df["Year"] == latest_year
+            ].copy()
+
+            st.dataframe(
+                latest_df.round(2),
+                hide_index=True,
+                width="stretch"
+            )
+
+        else:
+            st.warning("No common reporting year found.")
+
+        # ===== Revenue Comparison =====
+
+        st.subheader("Revenue Comparison ($B)")
+
+        st.line_chart(
+            comparison_df,
+            x="Year",
+            y="Revenue ($B)",
+            color="Company"
+        )
+
+        # ===== Profit Margin Comparison =====
+
+        st.subheader("Net Profit Margin Comparison (%)")
+
+        st.line_chart(
+            comparison_df,
+            x="Year",
+            y="Net Profit Margin (%)",
+            color="Company"
+        )
+
+        # ===== Revenue Growth Comparison =====
+
+        st.subheader("Revenue Growth Comparison (%)")
+
+        st.line_chart(
+            comparison_df,
+            x="Year",
+            y="Revenue Growth (%)",
+            color="Company"
+        )
+
+        # ===== Export =====
+
+        st.download_button(
+            "Download Comparison Data",
+            data=comparison_df.to_csv(index=False),
+            file_name="company_comparison.csv",
+            mime="text/csv"
+        )

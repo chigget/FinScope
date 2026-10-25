@@ -13,3 +13,5 @@ __pycache__/
 .env
 
 *_history.csv
+
+.pytest_cache/

@@ -1,4 +1,4 @@
-
+from validator import validate_financial_data
 import requests
 import sqlite3
 import csv
@@ -249,6 +249,21 @@ def main():
 
     company = data["entityName"]
     results = analyze_company(data)
+    
+    warnings = validate_financial_data(results)
+
+    print("\n===== Data Validation Report =====")
+    print("Core Validation: PASSED")
+
+    if warnings:
+        print(f"Warnings: {len(warnings)}")
+
+        for warning in warnings:
+            print("-", warning)
+    else:
+        print("Warnings: 0")
+
+    print("Financial data is ready for storage.")
 
     print(f"\n===== {company} Financial Report =====")
 
