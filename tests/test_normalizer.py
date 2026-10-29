@@ -4,7 +4,7 @@ from normalizer import (
     normalize_revenue
 )
 from analytics import analyze_company
-
+from validator import validate_financial_data
 
 # Create sample SEC records
 def fact(year, value, filed):
@@ -134,3 +134,45 @@ def test_analysis_with_different_tags():
     assert len(results) == 2
     assert results[0]["revenue_tag"] == "Revenues"
     assert abs(results[1]["revenue_growth"] - 20) < 0.001
+
+
+# Test 6: Missing year must not produce YoY growth
+
+def test_missing_year_does_not_create_yoy():
+
+    gaap = {
+        "Revenues": {
+            "units": {
+                "USD": [
+                    fact(2022, 100, "2023-01-15"),
+                    fact(2024, 130, "2025-01-15")
+                ]
+            }
+        },
+        "NetIncomeLoss": {
+            "units": {
+                "USD": [
+                    fact(2022, 20, "2023-01-15"),
+                    fact(2024, 26, "2025-01-15")
+                ]
+            }
+        }
+    }
+
+    results = analyze_company({
+        "facts": {
+            "us-gaap": gaap
+        }
+    })
+
+    assert len(results) == 2
+
+    # 30% across two years is NOT YoY growth
+    assert results[1]["revenue_growth"] is None
+
+    warnings = validate_financial_data(results)
+
+    assert any(
+        "Unusual reporting gap" in warning
+        for warning in warnings
+    )

@@ -111,3 +111,17 @@ def test_different_filing_warning(sample_data):
 
     assert len(warnings) == 1
     assert "different filings" in warnings[0]
+
+
+# Test 8: Reject YoY growth across missing years
+
+def test_invalid_growth_across_gap(sample_data):
+
+    sample_data[1]["year"] = 2025
+    sample_data[1]["period_end"] = "2025-09-27"
+
+    with pytest.raises(
+        ValueError,
+        match="reporting gap"
+    ):
+        validate_financial_data(sample_data)

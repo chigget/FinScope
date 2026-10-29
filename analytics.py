@@ -1,4 +1,5 @@
 
+from datetime import date
 
 from normalizer import (
     get_annual_records,
@@ -10,16 +11,18 @@ def analyze_company(data):
 
     financial_data = data["facts"]["us-gaap"]
 
-    # Normalize revenue across reporting years
-    revenue_data = normalize_revenue(financial_data)
+    # 1. Extract annual revenue
+    revenue_data = normalize_revenue(
+        financial_data
+    )
 
-    # Extract net income
+    # 2. Extract annual net income
     net_income_data = get_annual_records(
         financial_data,
         "NetIncomeLoss"
     )
 
-    # Match exact reporting periods
+    # 3. Match exact reporting periods
     common_periods = sorted(
         set(revenue_data) & set(net_income_data),
         key=lambda period: period[1]
@@ -32,6 +35,7 @@ def analyze_company(data):
 
     history = []
 
+    # 4. Calculate financial metrics
     for start, end in common_periods:
 
         revenue_record = revenue_data[(start, end)]
@@ -45,17 +49,40 @@ def analyze_company(data):
                 f"Invalid revenue for {end}"
             )
 
-        # Calculate YoY revenue growth
+        profit_margin = (
+            net_income / revenue * 100
+        )
+
+        # 5. Calculate YoY revenue growth
         growth = None
 
         if history:
-            previous_revenue = history[-1]["revenue"]
 
-            growth = (
-                revenue / previous_revenue - 1
-            ) * 100
+            previous = history[-1]
 
-        # Preserve both values and source metadata
+            previous_end = date.fromisoformat(
+                previous["period_end"]
+            )
+
+            current_end = date.fromisoformat(end)
+
+            gap_days = (
+                current_end - previous_end
+            ).days
+
+            # Only calculate annual growth
+            # for approximately consecutive years
+            if 330 <= gap_days <= 400:
+
+                previous_revenue = (
+                    previous["revenue"]
+                )
+
+                growth = (
+                    revenue / previous_revenue - 1
+                ) * 100
+
+        # 6. Save annual record
         history.append({
             "year": int(end[:4]),
             "period_start": start,
@@ -64,9 +91,7 @@ def analyze_company(data):
             "revenue": revenue,
             "net_income": net_income,
 
-            "profit_margin": (
-                net_income / revenue * 100
-            ),
+            "profit_margin": profit_margin,
             "revenue_growth": growth,
 
             "revenue_filing": revenue_record["accn"],
@@ -79,4 +104,5 @@ def analyze_company(data):
             "net_income_filed": income_record["filed"]
         })
 
+    # Return the latest 5 annual records
     return history[-5:]
