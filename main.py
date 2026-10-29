@@ -8,6 +8,7 @@ from database import save_to_database
 from exporter import export_csv
 from validator import validate_financial_data
 from provenance import save_provenance
+from quality import analyze_data_quality
 
 def main():
     print("===== Welcome to FinScope =====")
@@ -37,6 +38,25 @@ def main():
     print("Analyzing financial statements...")
 
     results = analyze_company(data)
+
+    quality_issues = analyze_data_quality(data, results)
+
+    print("\n===== Financial Data Quality Report =====")
+
+    if not quality_issues:
+        print("No issues detected by current quality rules.")
+
+    else:
+        for issue in quality_issues:
+            print(
+                f"[{issue['severity']}] "
+                f"{issue['code']} "
+                f"(FY{issue['year']}): "
+                f"{issue['message']}"
+            )
+
+        print(f"\nTotal findings: {len(quality_issues)}")
+
 
     # Step 3: Validate financial data
     print("Validating financial data...")
