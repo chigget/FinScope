@@ -1,7 +1,8 @@
-
+import shutil
 import streamlit as st
 import pandas as pd
 import sqlite3
+
 
 from pathlib import Path
 from contextlib import closing
@@ -20,6 +21,29 @@ st.set_page_config(
 )
 
 DB_PATH = Path(__file__).resolve().parent / "finscope.db"
+
+
+# ===== Deployment: Load Demo Database =====
+
+DEMO_DB = (
+    Path(__file__).resolve().parent
+    / "data"
+    / "finscope_demo.db"
+)
+
+# On Streamlit Cloud, the local database is absent.
+# Initialize it from the public demo snapshot.
+if not DB_PATH.exists():
+
+    if DEMO_DB.exists():
+        shutil.copyfile(DEMO_DB, DB_PATH)
+
+    else:
+        st.error(
+            "Database not found. "
+            "Run build_demo_db.py before deployment."
+        )
+        st.stop()
 
 
 # ===== Database Functions =====

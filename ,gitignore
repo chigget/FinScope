@@ -15,3 +15,5 @@ __pycache__/
 *_history.csv
 
 .pytest_cache/
+
+!data/finscope_demo.db
