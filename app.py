@@ -6,6 +6,10 @@ import sqlite3
 from pathlib import Path
 from contextlib import closing
 from provenance import get_provenance, build_filing_url
+from quality_store import get_quality_report
+from insights import generate_insights
+from html import escape
+from benchmark import build_peer_benchmark
 
 # ===== App Configuration =====
 
@@ -445,3 +449,245 @@ else:
         "Filing dates and financial periods "
         "may differ because of later filings."
     )
+
+
+# ===== Lesson 15: Data Quality Dashboard =====
+
+st.divider()
+st.header("Financial Data Quality")
+
+st.write(
+    "Automated checks for financial data "
+    "consistency and reporting anomalies."
+)
+
+# Load report for selected company
+report = get_quality_report(selected_cik)
+
+if report is None:
+
+    st.info(
+        "No quality report available. "
+        "Run main.py for this company first."
+    )
+
+else:
+    issues = report["issues"]
+
+    warnings = [
+        issue for issue in issues
+        if issue["severity"] == "WARNING"
+    ]
+
+    info_items = [
+        issue for issue in issues
+        if issue["severity"] == "INFO"
+    ]
+
+    # ===== Quality Summary =====
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Total Findings", len(issues))
+
+    with col2:
+        st.metric("Warnings", len(warnings))
+
+    with col3:
+        st.metric("Info", len(info_items))
+
+    st.caption(
+        f"Last checked (UTC): {report['checked_at']}"
+    )
+
+    # ===== Quality Status =====
+
+    if warnings:
+        st.warning(
+            f"{len(warnings)} potential data quality "
+            "issues require review."
+        )
+    else:
+        st.success(
+            "No warnings detected by the current rules."
+        )
+
+    # ===== Quality Findings Table =====
+
+    if issues:
+
+        quality_df = pd.DataFrame(issues)
+
+        quality_df = quality_df.rename(columns={
+            "severity": "Severity",
+            "code": "Issue Type",
+            "year": "Fiscal Year",
+            "message": "Description"
+        })
+
+        st.subheader("Detailed Findings")
+
+        st.dataframe(
+            quality_df[
+                [
+                    "Fiscal Year",
+                    "Severity",
+                    "Issue Type",
+                    "Description"
+                ]
+            ],
+            hide_index=True,
+            width="stretch"
+        )
+
+    else:
+        st.info(
+            "No findings were reported "
+            "by the current quality checks."
+        )
+
+
+# ===== Lesson 16: Automated Financial Insights =====
+
+st.divider()
+st.header("Automated Financial Insights")
+
+st.write(
+    "Data-driven financial analysis based "
+    "on historical SEC financial statements."
+)
+
+# Use the currently selected company's data
+financial_records = df.to_dict(orient="records")
+
+try:
+    insights = generate_insights(financial_records)
+
+    for insight in insights:
+
+        if insight["level"] == "warning":
+            st.warning(
+                f"{insight['title']}\n\n"
+                f"{insight['message']}"
+            )
+
+        else:
+            with st.container(border=True):
+                st.subheader(insight["title"])
+                message = escape(insight["message"])
+                st.html(f"<p>{message}</p>")
+
+except ValueError as error:
+    st.error(f"Unable to generate insights: {error}")
+
+st.caption(
+    "Insights are generated from historical financial "
+    "data using deterministic rules. They do not "
+    "establish the causes of financial changes "
+    "or provide investment recommendations."
+)
+
+
+# ===== Lesson 17: Peer Benchmarking =====
+
+st.divider()
+st.header("Financial Peer Benchmarking")
+
+st.write(
+    "Compare profitability and revenue growth "
+    "against selected peers."
+)
+
+peer_options = list(company_options.keys())
+
+selected_peers = st.multiselect(
+    "Select companies",
+    options=peer_options,
+    default=peer_options[:3],
+    max_selections=5,
+    key="benchmark_peers"
+)
+
+if len(selected_peers) < 2:
+    st.info("Select at least two companies.")
+
+else:
+    histories = {}
+
+    for label in selected_peers:
+        cik = company_options[label]
+
+        company_df = get_financial_data(cik)
+
+        if not company_df.empty:
+            histories[label] = company_df.to_dict(
+                orient="records"
+            )
+
+    try:
+        result = build_peer_benchmark(histories)
+
+    except ValueError as error:
+        st.warning(str(error))
+
+    else:
+        st.subheader(
+            f"Peer Comparison — {result['year']}"
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.metric(
+                "Median Net Margin",
+                f"{result['median_margin']:.2f}%"
+            )
+
+        with col2:
+            growth_median = result["median_growth"]
+
+            st.metric(
+                "Median Revenue Growth",
+                f"{growth_median:.2f}%"
+                if growth_median is not None
+                else "N/A"
+            )
+
+        benchmark_df = pd.DataFrame(result["rows"])
+
+        st.subheader("Peer Performance Ranking")
+
+        st.dataframe(
+            benchmark_df.round(2),
+            hide_index=True,
+            width="stretch"
+        )
+
+        st.subheader("Net Profit Margin Comparison")
+
+        st.bar_chart(
+            benchmark_df,
+            x="Company",
+            y="Net Margin (%)"
+        )
+
+        st.subheader("Revenue Growth Comparison")
+
+        if benchmark_df["Revenue Growth (%)"].notna().any():
+
+            st.bar_chart(
+                benchmark_df,
+                x="Company",
+                y="Revenue Growth (%)"
+            )
+
+        else:
+            st.info("Revenue growth data unavailable.")
+
+        st.caption(
+            "Companies are matched by reporting-end "
+            "calendar year, not identical fiscal periods. "
+            "Rankings describe net margins only and are "
+            "not investment recommendations."
+        )
